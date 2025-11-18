@@ -52,7 +52,7 @@ equipo_votante = st.selectbox("¿Quién está votando?", EQUIPOS)
 df_votos = pd.read_csv(ARCHIVO_VOTOS)
 
 # Sección de votación
-st.subheader("🗳️ Evalúa a los otros equipos")
+st.subheader("🗳️ Evalúa a los otros equipos ")
 for evaluado in EQUIPOS:
     if evaluado == equipo_votante:
         continue
