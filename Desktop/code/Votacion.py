@@ -82,7 +82,7 @@ for evaluado in EQUIPOS:
                     df_votos = pd.concat([df_votos, nuevo_voto], ignore_index=True)
                 df_votos.to_csv(ARCHIVO_VOTOS, index=False)
                 st.success(f"✅ Voto registrado para {evaluado}")
-                st.experimental_rerun()
+               
 
 # Sección de resultados en tiempo real
 st.subheader("📊 Resultados en tiempo real")
@@ -109,14 +109,18 @@ df_votos = pd.read_csv(ARCHIVO_VOTOS, dtype={"votante": str, "evaluado": str, "c
 if df_votos.empty:
     st.info("No hay datos para mostrar estadísticas.")
 else:
-    # Estadísticas globales
-    total_votos = len(df_votos)
+   # Estadísticas globales corregidas
+    total_filas = len(df_votos)
+    total_votos_reales = total_filas // len(CATEGORIAS)
     total_votantes = df_votos["votante"].nunique()
     total_evaluados = df_votos["evaluado"].nunique()
-    col_a, col_b, col_c = st.columns(3)
-    col_a.metric("Total filas", f"{total_votos}")
-    col_b.metric("Votantes únicos", f"{total_votantes}")
-    col_c.metric("Equipos evaluados", f"{total_evaluados}")
+    
+    col_a, col_b, col_c, col_d = st.columns(4)
+    col_a.metric("Total filas", f"{total_filas}")
+    col_b.metric("Votos registrados", f"{total_votos_reales}")
+    col_c.metric("Votantes únicos", f"{total_votantes}")
+    col_d.metric("Equipos evaluados", f"{total_evaluados}")
+    
 
     # Tabla resumen por equipo (media por categoría y total)
     resumen = df_votos.groupby(["evaluado", "categoria"])["puntos"].mean().unstack().fillna(0)
