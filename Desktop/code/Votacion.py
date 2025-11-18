@@ -1,7 +1,10 @@
-# Requiere: pip install streamlit-autorefresh
+# Requiere: pip install streamlit-autorefresh altair
 import streamlit as st
 import pandas as pd
 import os
+import time
+import json
+import altair as alt
 from streamlit_autorefresh import st_autorefresh
 
 # Configuración
@@ -98,3 +101,80 @@ if not df_votos.empty:
         st.markdown(f"### 🏆 Ganador: {nombres} — media {ganadores['Media Total'].iloc[0]:.2f}")
 else:
     st.info("Aún no hay votos registrados.")
+
+# === Estadísticas y gráficos adicionales ===
+st.markdown("---")
+st.subheader("📈 Estadísticas y gráficos")
+
+# Asegurar df_votos actualizado
+df_votos = pd.read_csv(ARCHIVO_VOTOS)
+
+if df_votos.empty:
+    st.info("No hay datos para mostrar estadísticas.")
+else:
+    # Estadísticas globales
+    total_votos = len(df_votos)
+    total_votantes = df_votos["votante"].nunique()
+    total_evaluados = df_votos["evaluado"].nunique()
+    col_a, col_b, col_c = st.columns(3)
+    col_a.metric("Total filas", f"{total_votos}")
+    col_b.metric("Votantes únicos", f"{total_votantes}")
+    col_c.metric("Equipos evaluados", f"{total_evaluados}")
+
+    # Tabla resumen por equipo (media por categoría y total)
+    resumen = df_votos.groupby(["evaluado", "categoria"])["puntos"].mean().unstack().fillna(0)
+    resumen["Media Total"] = resumen.mean(axis=1)
+    resumen = resumen.reset_index().rename(columns={"evaluado": "Equipo"})
+    st.write("**Resumen por equipo (medias)**")
+    st.dataframe(resumen.style.format(precision=2), height=300)
+
+    # Gráfico 1: barras horizontales de Media Total por equipo
+    barra_total = alt.Chart(resumen).mark_bar().encode(
+        x=alt.X("Media Total:Q", title="Media total"),
+        y=alt.Y("Equipo:N", sort='-x'),
+        color=alt.Color("Media Total:Q", scale=alt.Scale(scheme='blues')),
+        tooltip=[alt.Tooltip("Equipo:N"), alt.Tooltip("Media Total:Q", format=".2f")]
+    ).properties(height=300)
+    st.altair_chart(barra_total, use_container_width=True)
+
+    # Gráfico 2: perfil por equipo (líneas por categoría)
+    df_largo = df_votos.groupby(["evaluado", "categoria"])["puntos"].mean().reset_index().rename(columns={"evaluado":"Equipo"})
+    line_chart = alt.Chart(df_largo).mark_line(point=True).encode(
+        x=alt.X("categoria:N", title="Categoría"),
+        y=alt.Y("puntos:Q", title="Puntuación media", scale=alt.Scale(domain=[0,10])),
+        color=alt.Color("Equipo:N"),
+        tooltip=["Equipo", "categoria", alt.Tooltip("puntos:Q", format=".2f")]
+    ).properties(height=320)
+    st.write("**Perfil por equipo (por categoría)**")
+    st.altair_chart(line_chart, use_container_width=True)
+
+    # Gráfico 3: distribución de puntuaciones (histograma) por categoría
+    st.write("**Distribución de puntuaciones por categoría**")
+    cols = st.columns(len(CATEGORIAS))
+    for idx, cat in enumerate(CATEGORIAS):
+        with cols[idx]:
+            datos_cat = df_votos[df_votos["categoria"] == cat]
+            if datos_cat.empty:
+                st.write(f"{cat.title()}: sin datos")
+            else:
+                hist = alt.Chart(datos_cat).mark_bar().encode(
+                    alt.X("puntos:Q", bin=alt.Bin(maxbins=11), title="Puntos"),
+                    y='count()',
+                    tooltip=[alt.Tooltip('count()', title='Recuento')]
+                ).properties(title=cat.title(), height=240)
+                st.altair_chart(hist, use_container_width=True)
+
+    # Gráfico 4: heatmap de medias por equipo y categoría
+    heat_df = df_votos.groupby(["evaluado", "categoria"])["puntos"].mean().reset_index().rename(columns={"evaluado": "Equipo", "puntos": "Media"})
+    heat = alt.Chart(heat_df).mark_rect().encode(
+        x=alt.X("categoria:N", title="Categoría"),
+        y=alt.Y("Equipo:N", sort=alt.EncodingSortField(field="Media", op="mean", order="descending")),
+        color=alt.Color("Media:Q", scale=alt.Scale(scheme='oranges'), title="Media"),
+        tooltip=["Equipo", "categoria", alt.Tooltip("Media:Q", format=".2f")]
+    ).properties(height=300)
+    st.write("**Mapa de calor de medias**")
+    st.altair_chart(heat, use_container_width=True)
+
+    # Opcional: descarga de CSV con estadísticas agregadas
+    csv_bytes = resumen.to_csv(index=False).encode('utf-8')
+    st.download_button("Descargar resumen CSV", data=csv_bytes, file_name="resumen_votos.csv", mime="text/csv")
