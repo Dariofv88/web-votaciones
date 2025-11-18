@@ -2,21 +2,21 @@
 import streamlit as st
 import pandas as pd
 import os
-import time
-import json
 import altair as alt
 from streamlit_autorefresh import st_autorefresh
 
-# Configuración
+# Configuración de la página (debe ir antes de crear títulos)
+st.set_page_config(page_title="Cena por comunidades", layout="centered")
+
+# Configuración de datos
 EQUIPOS = [
-    "Maria Elvira",
-    "Pau, Pauli, Carmen",
-    "Anna, Oria, Carla",
-    "Pablo, Alejandra",
-    "Javi, Jorge",
-    "Manu, Tomas, Paula",
-    "Dario, Mateo",
-    "Mariana, Ainhora, Sara"
+    "Manu, Tomas y Javi",
+    "Dario y Mateo",
+    "Ainhoa,Pau y Ale",
+    "Pauli y Carmen",
+    "Anna, Paula, Jorge y Carla",
+    "Mariana,Pablo,Leyre y Sara",
+    "María y Elvira"
 ]
 CATEGORIAS = ["sabor", "presentacion", "creatividad"]
 ARCHIVO_VOTOS = "votos.csv"
@@ -28,7 +28,6 @@ if not os.path.exists(ARCHIVO_VOTOS):
 # Autorefresh: reejecuta el script cada 1 segundo (1000 ms)
 count = st_autorefresh(interval=1000, key="votos_autorefresh")
 
-st.set_page_config(page_title="Cena por comunidades", layout="centered")
 st.title("🍽️ Cena por comunidades")
 
 # CSS para ocultar el icono humano / toolbar superior
@@ -37,8 +36,6 @@ st.markdown(
     <style>
     /* Oculta la toolbar superior completa (incluye el icono de usuario) */
     [data-testid="stToolbar"] {display: none !important;}
-
-    /* Si alguna parte queda visible en versiones futuras, también intentamos ocultar el avatar específico */
     button[aria-label="Open user menu"], img[alt="Avatar"] {display: none !important;}
     </style>
     """,
@@ -48,8 +45,8 @@ st.markdown(
 # Selección del votante
 equipo_votante = st.selectbox("¿Quién está votando?", EQUIPOS)
 
-# Cargar votos actuales (se lee siempre en cada ejecución)
-df_votos = pd.read_csv(ARCHIVO_VOTOS)
+# Cargar votos actuales (leer siempre para estar sincronizado)
+df_votos = pd.read_csv(ARCHIVO_VOTOS, dtype={"votante": str, "evaluado": str, "categoria": str, "puntos": float})
 
 # Sección de votación
 st.subheader("🗳️ Evalúa a los otros equipos ")
@@ -74,13 +71,13 @@ for evaluado in EQUIPOS:
                 )
             if st.button(f"Registrar voto para {evaluado}", key=f"btn_{equipo_votante}_{evaluado}"):
                 # Leer de nuevo por si hubo cambios entre abrir y guardar
-                df_votos = pd.read_csv(ARCHIVO_VOTOS)
+                df_votos = pd.read_csv(ARCHIVO_VOTOS, dtype={"votante": str, "evaluado": str, "categoria": str, "puntos": float})
                 for cat in CATEGORIAS:
                     nuevo_voto = pd.DataFrame([{
                         "votante": equipo_votante,
                         "evaluado": evaluado,
                         "categoria": cat,
-                        "puntos": puntos[cat]
+                        "puntos": int(puntos[cat])
                     }])
                     df_votos = pd.concat([df_votos, nuevo_voto], ignore_index=True)
                 df_votos.to_csv(ARCHIVO_VOTOS, index=False)
@@ -107,7 +104,7 @@ st.markdown("---")
 st.subheader("📈 Estadísticas y gráficos")
 
 # Asegurar df_votos actualizado
-df_votos = pd.read_csv(ARCHIVO_VOTOS)
+df_votos = pd.read_csv(ARCHIVO_VOTOS, dtype={"votante": str, "evaluado": str, "categoria": str, "puntos": float})
 
 if df_votos.empty:
     st.info("No hay datos para mostrar estadísticas.")
@@ -148,7 +145,7 @@ else:
     st.write("**Perfil por equipo (por categoría)**")
     st.altair_chart(line_chart, use_container_width=True)
 
-    # Gráficos de columnas por categoría (puntuación media de cada equipo)
+    # Gráficos de columnas por categoría
     st.write("**Puntuación media por equipo en cada categoría**")
     media_por_equipo_cat = df_votos.groupby(["evaluado", "categoria"])["puntos"].mean().reset_index().rename(columns={"evaluado": "Equipo", "puntos": "Media"})
 
@@ -159,17 +156,16 @@ else:
             if df_cat.empty:
                 st.write(f"{cat.title()}: sin datos")
             else:
-                # Ordenar equipos por media descendente para mejor lectura
                 df_cat = df_cat.sort_values("Media", ascending=False)
                 bars = alt.Chart(df_cat).mark_bar().encode(
                     x=alt.X("Media:Q", title="Puntuación media", scale=alt.Scale(domain=[0,10])),
                     y=alt.Y("Equipo:N", sort=alt.EncodingSortField(field="Media", op="mean", order="descending")),
-                    color=alt.Color("Media:Q", scale=alt.Scale(scheme='tealblue')),
+                    color=alt.Color("Media:Q", scale=alt.Scale(scheme='tealblues')),
                     tooltip=[alt.Tooltip("Equipo:N"), alt.Tooltip("Media:Q", format=".2f")]
                 ).properties(title=cat.title(), height=320)
                 st.altair_chart(bars, use_container_width=True)
 
-    # Gráficos circulares por categoría (porcentaje según media de puntuación)
+    # Gráficos circulares por categoría
     st.write("**Gráficos circulares por categoría (porcentaje según media de puntuación)**")
     pie_cols = st.columns(len(CATEGORIAS))
     for i, cat in enumerate(CATEGORIAS):
@@ -187,6 +183,14 @@ else:
             st.altair_chart(pie, use_container_width=True)
             st.caption(f"Suma de medias (para proporción): {total_media:.2f}")
 
-    # Opcional: descarga de CSV con estadísticas agregadas
-    csv_bytes = resumen.to_csv(index=False).encode('utf-8')
-    st.download_button("Descargar resumen CSV", data=csv_bytes, file_name="resumen_votos.csv", mime="text/csv")
+    # === Rincón de la vergüenza ===
+    st.markdown("---")
+    st.subheader("😳 Rincón de la vergüenza")
+
+    if resumen.empty:
+        st.info("No hay datos para determinar el rincón de la vergüenza.")
+    else:
+        min_val = resumen["Media Total"].min()
+        perdedores = resumen[resumen["Media Total"] == min_val].copy()
+        nombres_perdedores = ", ".join(perdedores["Equipo"])
+        st.error(f"🏴‍☠️ Equipo en el Rincón de la vergüenza: **{nombres_perdedores}** — media {min_val:.2f}")
