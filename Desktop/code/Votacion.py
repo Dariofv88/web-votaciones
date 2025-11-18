@@ -26,7 +26,7 @@ if not os.path.exists(ARCHIVO_VOTOS):
     pd.DataFrame(columns=["votante", "evaluado", "categoria", "puntos"]).to_csv(ARCHIVO_VOTOS, index=False)
 
 # Autorefresh: reejecuta el script cada 1 segundo (1000 ms)
-count = st_autorefresh(interval=1000, key="votos_autorefresh")
+count = st_autorefresh(interval=5000, key="votos_autorefresh")
 
 st.title("🍽️ Cena por comunidades")
 
