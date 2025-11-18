@@ -148,32 +148,44 @@ else:
     st.write("**Perfil por equipo (por categoría)**")
     st.altair_chart(line_chart, use_container_width=True)
 
-    # Gráfico 3: distribución de puntuaciones (histograma) por categoría
-    st.write("**Distribución de puntuaciones por categoría**")
+    # Gráficos de columnas por categoría (puntuación media de cada equipo)
+    st.write("**Puntuación media por equipo en cada categoría**")
+    media_por_equipo_cat = df_votos.groupby(["evaluado", "categoria"])["puntos"].mean().reset_index().rename(columns={"evaluado": "Equipo", "puntos": "Media"})
+
     cols = st.columns(len(CATEGORIAS))
     for idx, cat in enumerate(CATEGORIAS):
         with cols[idx]:
-            datos_cat = df_votos[df_votos["categoria"] == cat]
-            if datos_cat.empty:
+            df_cat = media_por_equipo_cat[media_por_equipo_cat["categoria"] == cat].copy()
+            if df_cat.empty:
                 st.write(f"{cat.title()}: sin datos")
             else:
-                hist = alt.Chart(datos_cat).mark_bar().encode(
-                    alt.X("puntos:Q", bin=alt.Bin(maxbins=11), title="Puntos"),
-                    y='count()',
-                    tooltip=[alt.Tooltip('count()', title='Recuento')]
-                ).properties(title=cat.title(), height=240)
-                st.altair_chart(hist, use_container_width=True)
+                # Ordenar equipos por media descendente para mejor lectura
+                df_cat = df_cat.sort_values("Media", ascending=False)
+                bars = alt.Chart(df_cat).mark_bar().encode(
+                    x=alt.X("Media:Q", title="Puntuación media", scale=alt.Scale(domain=[0,10])),
+                    y=alt.Y("Equipo:N", sort=alt.EncodingSortField(field="Media", op="mean", order="descending")),
+                    color=alt.Color("Media:Q", scale=alt.Scale(scheme='tealblue')),
+                    tooltip=[alt.Tooltip("Equipo:N"), alt.Tooltip("Media:Q", format=".2f")]
+                ).properties(title=cat.title(), height=320)
+                st.altair_chart(bars, use_container_width=True)
 
-    # Gráfico 4: heatmap de medias por equipo y categoría
-    heat_df = df_votos.groupby(["evaluado", "categoria"])["puntos"].mean().reset_index().rename(columns={"evaluado": "Equipo", "puntos": "Media"})
-    heat = alt.Chart(heat_df).mark_rect().encode(
-        x=alt.X("categoria:N", title="Categoría"),
-        y=alt.Y("Equipo:N", sort=alt.EncodingSortField(field="Media", op="mean", order="descending")),
-        color=alt.Color("Media:Q", scale=alt.Scale(scheme='oranges'), title="Media"),
-        tooltip=["Equipo", "categoria", alt.Tooltip("Media:Q", format=".2f")]
-    ).properties(height=300)
-    st.write("**Mapa de calor de medias**")
-    st.altair_chart(heat, use_container_width=True)
+    # Gráficos circulares por categoría (porcentaje según media de puntuación)
+    st.write("**Gráficos circulares por categoría (porcentaje según media de puntuación)**")
+    pie_cols = st.columns(len(CATEGORIAS))
+    for i, cat in enumerate(CATEGORIAS):
+        with pie_cols[i]:
+            df_pie = media_por_equipo_cat[media_por_equipo_cat["categoria"] == cat].copy()
+            if df_pie.empty:
+                st.write(f"{cat.title()}: sin datos")
+                continue
+            pie = alt.Chart(df_pie).mark_arc(innerRadius=30).encode(
+                theta=alt.Theta(field="Media", type="quantitative"),
+                color=alt.Color(field="Equipo", type="nominal"),
+                tooltip=[alt.Tooltip("Equipo:N"), alt.Tooltip("Media:Q", format=".2f")]
+            ).properties(height=300, title=cat.title())
+            total_media = df_pie["Media"].sum()
+            st.altair_chart(pie, use_container_width=True)
+            st.caption(f"Suma de medias (para proporción): {total_media:.2f}")
 
     # Opcional: descarga de CSV con estadísticas agregadas
     csv_bytes = resumen.to_csv(index=False).encode('utf-8')
