@@ -194,3 +194,14 @@ else:
         perdedores = resumen[resumen["Media Total"] == min_val].copy()
         nombres_perdedores = ", ".join(perdedores["Equipo"])
         st.error(f"🏴‍☠️ Equipo en el Rincón de la vergüenza: **{nombres_perdedores}** — media {min_val:.2f}")
+    # === Botón para descargar el archivo de votos ===
+st.markdown("---")
+st.subheader("📥 Descargar votos registrados")
+
+with open(ARCHIVO_VOTOS, "rb") as f:
+    st.download_button(
+        label="⬇️ Descargar votos.csv",
+        data=f,
+        file_name="votos.csv",
+        mime="text/csv"
+    )
